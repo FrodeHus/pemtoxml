@@ -15,7 +15,6 @@ import (
 )
 
 var _privateKeyFile string
-var _publicKeyFile string
 
 //RsaPublicKey represents a XML structure for a RSA public key
 type RsaPublicKey struct {
@@ -46,18 +45,16 @@ func main() {
 	if _privateKeyFile != "" {
 		keyfile, err := ioutil.ReadFile(_privateKeyFile)
 		if err != nil {
-			fmt.Printf("Failed to read public key: %s\n", err)
+			fmt.Printf("Failed to read private key: %s\n", err)
 			os.Exit(1)
 		}
 
 		publicPem, _ := pem.Decode(keyfile)
 		parsedKey, err := x509.ParsePKCS1PrivateKey(publicPem.Bytes)
 		if err != nil {
-			fmt.Printf("Failed to parse public key: %s\n", err)
+			fmt.Printf("Failed to parse private key: %s\n", err)
 			os.Exit(1)
 		}
-
-		fmt.Println("Generating XML from private key...")
 
 		privKey := &RsaPrivateKey{}
 		privateXML, err := privKey.GenerateXMLFrom(parsedKey)
@@ -67,7 +64,6 @@ func main() {
 
 		ioutil.WriteFile("private.pem.xml", privateXML, os.FileMode(0755))
 
-		fmt.Println("Generating XML from public key...")
 		publicKey := &RsaPublicKey{}
 		publicXML, err := publicKey.GenerateXMLFrom(parsedKey)
 		if err != nil {
@@ -80,6 +76,7 @@ func main() {
 
 //GenerateXMLFrom returns XML for the specified public key PEM file
 func (key *RsaPublicKey) GenerateXMLFrom(privateKey *rsa.PrivateKey) ([]byte, error) {
+	fmt.Println("Generating XML for public key...")
 
 	publicKey := privateKey.PublicKey
 
@@ -92,6 +89,7 @@ func (key *RsaPublicKey) GenerateXMLFrom(privateKey *rsa.PrivateKey) ([]byte, er
 
 // GenerateXMLFrom returns XML for the specified private key PEM file
 func (key *RsaPrivateKey) GenerateXMLFrom(privateKey *rsa.PrivateKey) ([]byte, error) {
+	fmt.Println("Generating XML for private key...")
 
 	e, _ := IntToBytes(privateKey.E)
 
