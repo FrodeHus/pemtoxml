@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
@@ -37,80 +38,71 @@ type RsaPrivateKey struct {
 }
 
 func init() {
-	flag.StringVar(&_privateKeyFile, "privateKey", "./private.pem", "Path to private key")
-	flag.StringVar(&_publicKeyFile, "publicKey", "", "Path to public key")
+	flag.StringVar(&_privateKeyFile, "privateKey", "private.pem", "Path to private key")
+	flag.Parse()
 }
 
 func main() {
 	if _privateKeyFile != "" {
+		keyfile, err := ioutil.ReadFile(_privateKeyFile)
+		if err != nil {
+			fmt.Printf("Failed to read public key: %s\n", err)
+			os.Exit(1)
+		}
+
+		publicPem, _ := pem.Decode(keyfile)
+		parsedKey, err := x509.ParsePKCS1PrivateKey(publicPem.Bytes)
+		if err != nil {
+			fmt.Printf("Failed to parse public key: %s\n", err)
+			os.Exit(1)
+		}
+
 		fmt.Println("Generating XML from private key...")
+
 		privKey := &RsaPrivateKey{}
-		xml, err := privKey.GenerateXMLFrom(_privateKeyFile)
+		privateXML, err := privKey.GenerateXMLFrom(parsedKey)
 		if err != nil {
 			os.Exit(1)
 		}
 
-		ioutil.WriteFile("private.xml", xml, os.FileMode(0755))
-	}
-	if _publicKeyFile != "" {
+		ioutil.WriteFile("private.pem.xml", privateXML, os.FileMode(0755))
+
 		fmt.Println("Generating XML from public key...")
 		publicKey := &RsaPublicKey{}
-		xml, err := publicKey.GenerateXMLFrom(_publicKeyFile)
+		publicXML, err := publicKey.GenerateXMLFrom(parsedKey)
 		if err != nil {
 			os.Exit(1)
 		}
 
-		ioutil.WriteFile("public.xml", xml, os.FileMode(0755))
+		ioutil.WriteFile("public.pem.xml", publicXML, os.FileMode(0755))
 	}
 }
 
 //GenerateXMLFrom returns XML for the specified public key PEM file
-func (key *RsaPublicKey) GenerateXMLFrom(publicKeyFile string) ([]byte, error) {
-	keyfile, err := ioutil.ReadFile(publicKeyFile)
-	if err != nil {
-		fmt.Printf("Failed to read public key: %s\n", err)
-		return nil, err
-	}
+func (key *RsaPublicKey) GenerateXMLFrom(privateKey *rsa.PrivateKey) ([]byte, error) {
 
-	publicPem, _ := pem.Decode(keyfile)
-	parsedKey, err := x509.ParsePKCS1PublicKey(publicPem.Bytes)
-	if err != nil {
-		fmt.Printf("Failed to parse public key: %s\n", err)
-		return nil, err
-	}
+	publicKey := privateKey.PublicKey
 
-	e, _ := IntToBytes(parsedKey.E)
-	key.Modulus = base64.StdEncoding.EncodeToString(parsedKey.N.Bytes())
+	e, _ := IntToBytes(publicKey.E)
+	key.Modulus = base64.StdEncoding.EncodeToString(publicKey.N.Bytes())
 	key.Exponent = base64.StdEncoding.EncodeToString(e)
 
 	return xml.MarshalIndent(key, "", "	")
 }
 
 // GenerateXMLFrom returns XML for the specified private key PEM file
-func (key *RsaPrivateKey) GenerateXMLFrom(privateKeyFile string) ([]byte, error) {
-	keyfile, err := ioutil.ReadFile(privateKeyFile)
-	if err != nil {
-		fmt.Printf("Failed to read private key: %s\n", err)
-		return nil, err
-	}
+func (key *RsaPrivateKey) GenerateXMLFrom(privateKey *rsa.PrivateKey) ([]byte, error) {
 
-	privPem, _ := pem.Decode(keyfile)
-	parsedKey, err := x509.ParsePKCS1PrivateKey(privPem.Bytes)
-	if err != nil {
-		fmt.Printf("Failed to parse private key: %s\n", err)
-		return nil, err
-	}
+	e, _ := IntToBytes(privateKey.E)
 
-	e, _ := IntToBytes(parsedKey.E)
-
-	key.Modulus = base64.StdEncoding.EncodeToString(parsedKey.N.Bytes())
+	key.Modulus = base64.StdEncoding.EncodeToString(privateKey.N.Bytes())
 	key.Exponent = base64.RawURLEncoding.EncodeToString(e)
-	key.D = base64.StdEncoding.EncodeToString(parsedKey.D.Bytes())
-	key.P = base64.StdEncoding.EncodeToString(parsedKey.Primes[0].Bytes())
-	key.Q = base64.StdEncoding.EncodeToString(parsedKey.Primes[1].Bytes())
-	key.DP = base64.StdEncoding.EncodeToString(parsedKey.Precomputed.Dp.Bytes())
-	key.DQ = base64.StdEncoding.EncodeToString(parsedKey.Precomputed.Dq.Bytes())
-	key.InverseQ = base64.StdEncoding.EncodeToString(parsedKey.Precomputed.Qinv.Bytes())
+	key.D = base64.StdEncoding.EncodeToString(privateKey.D.Bytes())
+	key.P = base64.StdEncoding.EncodeToString(privateKey.Primes[0].Bytes())
+	key.Q = base64.StdEncoding.EncodeToString(privateKey.Primes[1].Bytes())
+	key.DP = base64.StdEncoding.EncodeToString(privateKey.Precomputed.Dp.Bytes())
+	key.DQ = base64.StdEncoding.EncodeToString(privateKey.Precomputed.Dq.Bytes())
+	key.InverseQ = base64.StdEncoding.EncodeToString(privateKey.Precomputed.Qinv.Bytes())
 	return xml.MarshalIndent(key, "", "	")
 }
 
